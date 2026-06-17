@@ -43,7 +43,7 @@ class SendEmailTool(BaseTool):
 
         try:
             response = resend.Emails.send({
-                "from": "Daily Digest <digest@resend.dev>",
+                "from": "Gold & Silver Agent <digest@resend.dev>",
                 "to": recipients,
                 "subject": subject,
                 "html": html_body,
