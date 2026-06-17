@@ -31,6 +31,9 @@ class SendEmailTool(BaseTool):
         if not recipient:
             return "ERROR: DIGEST_RECIPIENT_EMAIL is not set. Email not sent."
 
+        # Support comma-separated list of recipients
+        recipients = [r.strip() for r in recipient.split(",") if r.strip()]
+
         if not DIGEST_FILE.exists():
             return f"ERROR: {DIGEST_FILE} not found. Compose task may not have run yet."
 
@@ -41,14 +44,14 @@ class SendEmailTool(BaseTool):
         try:
             response = resend.Emails.send({
                 "from": "Daily Digest <digest@resend.dev>",
-                "to": [recipient],
+                "to": recipients,
                 "subject": subject,
                 "html": html_body,
             })
             return (
                 f"Email sent successfully. "
                 f"ID: {response.get('id', 'unknown')}. "
-                f"Subject: '{subject}' → {recipient}"
+                f"Subject: '{subject}' → {', '.join(recipients)}"
             )
         except Exception as e:
             return f"Failed to send email: {e}"
