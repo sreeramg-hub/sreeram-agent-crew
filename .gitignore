@@ -1,0 +1,10 @@
+.env
+__pycache__/
+.DS_Store
+.venv/
+*.pyc
+cookies.txt
+
+# state/ is intentionally tracked — committed back each run
+# digest.html is ephemeral — not tracked
+digest.html

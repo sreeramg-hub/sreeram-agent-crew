@@ -1,0 +1,76 @@
+gold_research_task:
+  description: >
+    Produce today's gold market briefing using your tools in this order:
+    1. Use price_lookup with metal="gold" to get the current price and % change.
+    2. Use youtube_new_uploads with metal="gold" and channel_ids="{gold_channel_ids}"
+       to find any new videos not yet processed.
+    3. For each new video returned, use transcribe_video on its URL to get the
+       full transcript, then summarise the key points with explicit attribution
+       (e.g. "Jordan Roy-Byrne said...", "According to Kitco's guest X...").
+    If no new videos are found, note that explicitly.
+    Every price target or prediction must be attributed to whoever stated it.
+  expected_output: >
+    A structured markdown briefing with:
+    - Gold price section: current price, % change, direction
+    - New videos section: for each video, channel name, title, date, and a
+      3-5 sentence attributed summary of key points
+    - If sources disagree on direction, flag it explicitly
+    - "No new videos today" if youtube_new_uploads returned none
+  agent: gold_agent
+
+silver_research_task:
+  description: >
+    Produce today's silver market briefing using your tools in this order:
+    1. Use price_lookup with metal="silver" to get the current price and % change.
+    2. Use youtube_new_uploads with metal="silver" and channel_ids="{silver_channel_ids}"
+       to find any new videos not yet processed.
+    3. For each new video returned, use transcribe_video on its URL to get the
+       full transcript, then summarise the key points with explicit attribution.
+    If no new videos are found, note that explicitly.
+    Every price target or prediction must be attributed to whoever stated it.
+  expected_output: >
+    A structured markdown briefing with:
+    - Silver price section: current price, % change, direction
+    - New videos section: for each video, channel name, title, date, and a
+      3-5 sentence attributed summary of key points
+    - If sources disagree on direction, flag it explicitly
+    - "No new videos today" if youtube_new_uploads returned none
+  agent: silver_agent
+
+compose_digest_task:
+  description: >
+    You will receive the gold briefing and silver briefing from the research
+    agents. Write the complete HTML email digest to the file digest.html.
+    The email must:
+    1. Open with a one-paragraph market overview (prices only, no opinions).
+    2. Have a Gold section with the attributed summaries.
+    3. Have a Silver section with the attributed summaries.
+    4. End with this exact disclaimer:
+       "This digest is compiled from public YouTube sources for personal research
+       only. All opinions and price targets are attributed to their original
+       sources and do not represent financial advice."
+    Do NOT call any tools. Just write the HTML content as your final answer
+    and it will be saved to digest.html automatically.
+    IMPORTANT: Output raw HTML only. Do NOT wrap it in markdown code fences
+    (no ```html or ``` markers). Start directly with <html> and end with </html>.
+  expected_output: >
+    Raw HTML only — starting with <html> and ending with </html>. No markdown
+    code fences, no commentary before or after. Just the HTML document containing
+    the full daily digest with gold section, silver section, and the required
+    disclaimer.
+  output_file: digest.html
+  agent: final_agent
+  context:
+    - gold_research_task
+    - silver_research_task
+
+send_digest_task:
+  description: >
+    The digest HTML has already been written to digest.html by the previous task.
+    Call the send_email tool with only the subject line:
+      subject: "Daily Gold & Silver Digest — {today_date}"
+    The tool reads digest.html automatically — you do not need to pass the body.
+  expected_output: >
+    Confirmation that the email was sent, including the message ID returned
+    by the API, or a clear error message if sending failed.
+  agent: final_agent

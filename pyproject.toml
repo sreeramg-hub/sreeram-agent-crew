@@ -1,0 +1,27 @@
+[project]
+name = "sreeram_crew_scaffold"
+version = "0.1.0"
+description = "sreeram-crew-scaffold using crewAI"
+authors = [{ name = "Your Name", email = "you@example.com" }]
+requires-python = ">=3.10,<3.14"
+dependencies = [
+    "crewai[anthropic,tools]==1.14.7",
+    "resend>=2.32.2",
+    "youtube-transcript-api>=1.2.4",
+    "yt-dlp>=2026.6.9",
+]
+
+[project.scripts]
+sreeram_crew_scaffold = "sreeram_crew_scaffold.main:run"
+run_crew = "sreeram_crew_scaffold.main:run"
+train = "sreeram_crew_scaffold.main:train"
+replay = "sreeram_crew_scaffold.main:replay"
+test = "sreeram_crew_scaffold.main:test"
+run_with_trigger = "sreeram_crew_scaffold.main:run_with_trigger"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.crewai]
+type = "crew"
