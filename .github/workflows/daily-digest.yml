@@ -37,6 +37,7 @@ jobs:
       - name: Run crew
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          MODEL: anthropic/claude-sonnet-4-6
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           DIGEST_RECIPIENT_EMAIL: ${{ secrets.DIGEST_RECIPIENT_EMAIL }}
           GOLD_CHANNEL_IDS: ${{ vars.GOLD_CHANNEL_IDS }}

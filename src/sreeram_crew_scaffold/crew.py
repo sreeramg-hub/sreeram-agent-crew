@@ -1,11 +1,18 @@
+import os
 import pathlib
 
-from crewai import Agent, Crew, Process, Task
+from crewai import Agent, Crew, LLM, Process, Task
 from crewai.project import CrewBase, agent, crew, task
 from crewai.agents.agent_builder.base_agent import BaseAgent
 from crewai.tools import BaseTool
 from pydantic import BaseModel, Field
 from typing import Type
+
+# Explicitly use Anthropic so the crew never falls back to OpenAI
+_LLM = LLM(
+    model=os.getenv("MODEL", "anthropic/claude-sonnet-4-6"),
+    api_key=os.getenv("ANTHROPIC_API_KEY"),
+)
 
 from sreeram_crew_scaffold.tools.price_tool import PriceLookupTool
 from sreeram_crew_scaffold.tools.youtube_tool import YoutubeNewUploadsTool
@@ -42,6 +49,7 @@ class SreeramCrewScaffold():
         return Agent(
             config=self.agents_config['gold_agent'],
             tools=[PriceLookupTool(), YoutubeNewUploadsTool(), TranscribeVideoTool()],
+            llm=_LLM,
             verbose=True,
         )
 
@@ -50,6 +58,7 @@ class SreeramCrewScaffold():
         return Agent(
             config=self.agents_config['silver_agent'],
             tools=[PriceLookupTool(), YoutubeNewUploadsTool(), TranscribeVideoTool()],
+            llm=_LLM,
             verbose=True,
         )
 
@@ -58,6 +67,7 @@ class SreeramCrewScaffold():
         return Agent(
             config=self.agents_config['final_agent'],
             tools=[ReadFileTool(), SendEmailTool()],
+            llm=_LLM,
             verbose=True,
         )
 
