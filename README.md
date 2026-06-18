@@ -1,86 +1,65 @@
 # sreeram-agent-crew
 
-## What this repo is
+A personal multi-agent automation built on [CrewAI](https://github.com/crewaiinc/crewai) (open-source) and Anthropic Claude. Three AI agents collaborate daily to research gold and silver markets, summarise new YouTube analysis with full attribution, and deliver a consolidated digest email — automatically, every morning.
 
-This is the **working implementation** of a multi-agent system built on the
-open-source **CrewAI** Python framework. Three agents run on a daily
-schedule via GitHub Actions, research gold/silver markets, and email a
-consolidated daily digest.
-
-This repo contains the actual runnable code, secrets configuration, and
-GitHub Actions workflows. It is the "does the thing" repo.
-
-For the companion repo that documents and extracts reusable patterns from
-this code for others to learn from/fork, see **`sreeram-agent-skills`**
-(separate repo, separate purpose — see its own README for the distinction).
+A companion repo ([sreeram-agent-skills](https://github.com/sreeramg-hub/sreeram-agent-skills)) extracts the reusable patterns from this project for anyone building similar agentic automations.
 
 ---
 
-## Why this exists (context for whoever/whatever is building this)
+## What it does
 
-Primary goals, in order:
+**Daily digest (runs every morning)**
+- Fetches live gold and silver spot prices
+- Checks tracked YouTube channels for new uploads since the last run
+- Transcribes new videos and summarises key analyst opinions — always attributed to the person who said them, never stated as fact
+- Composes a structured HTML email and delivers it via [Resend](https://resend.com)
 
-1. **Learn and upskill** in agentic AI architecture by building something real, not a toy tutorial.
-2. **Automate a genuine daily task** — tracking gold/silver prices and watching specific YouTube channels/experts for new analysis, normally done manually.
-3. Use a current, resume-relevant framework (CrewAI) rather than rolling bespoke orchestration code, so the build itself is a learning exercise in the framework.
-4. Eventually link this project from a personal portfolio site as a case study.
+**Hourly price alerts**
+- Checks gold and silver prices every hour
+- Sends an immediate alert email if either metal drops more than $75 from the previous close
 
-This is a **personal project**, not a commercial product. No enterprise
-infra. Runs for free (or near-zero cost) using GitHub Actions' free tier +
-Anthropic API usage + a transcription API + a free-tier email API.
+Everything runs on GitHub Actions free tier. No servers, no databases, no CrewAI cloud platform — just your own API keys running on GitHub's runners.
 
 ---
 
 ## Architecture
 
 ```
-Gold Agent ──┐
-             ├──> Final Agent (manager/editor) ──> Daily email
-Silver Agent ┘
+                    ┌─────────────────────────────────────┐
+                    │         GitHub Actions (cron)        │
+                    └──────────────┬──────────────────────┘
+                                   │
+              ┌────────────────────▼────────────────────┐
+              │              CrewAI Crew                 │
+              │                                          │
+              │  Gold Agent ──┐                          │
+              │               ├──► Final Agent ──► Email │
+              │  Silver Agent ┘                          │
+              └──────────────────────────────────────────┘
 ```
 
-- **Gold Agent**: checks today's gold price + % change, checks tracked
-  YouTube channels for new uploads, transcribes any new videos, summarizes
-  with attributed sentiment (bullish/bearish/neutral, always tied to who
-  said it — never stated as fact).
-- **Silver Agent**: identical pattern, for silver.
-- **Final Agent**: consolidates both reports into one HTML email. Acts as
-  an editor, not an analyst — it organizes and clarifies, it does not add
-  new claims or flatten attributed opinions into unattributed "facts."
+**Gold Agent** — price lookup → YouTube new-upload check → transcript → attributed summary
 
-**Why CrewAI**: each agent maps naturally to a role-playing team member
-(role, goal, backstory) with its own tools, coordinated through Tasks and a
-Crew. This is the framework's core mental model and matches this project's
-shape closely. We're using the **open-source `crewai` Python package**,
-not CrewAI's hosted Studio/cloud platform — there's no execution quota,
-because nothing runs on CrewAI's infrastructure. All execution happens in
-our own GitHub Actions runners, calling our own Anthropic API key directly.
+**Silver Agent** — identical pattern, independent state
 
-**Important framing on "sentiment analysis":** this system is built to be
-an aggregator with labeled synthesis, not a source of financial advice.
-Every price target or prediction is attributed to whoever said it. The
-Final Agent's job is editorial consolidation, not generating new opinions.
-The output email includes a disclaimer that this is synthesized from
-public sources for personal research, not financial advice. This is a
-deliberate design constraint, not an afterthought — preserve it through
-any changes to prompts or task descriptions.
+**Final Agent** — editorial consolidation only. Receives both research outputs, writes an HTML digest, sends it. Does not add new opinions or claims.
+
+**Price Alert** — standalone script (no LLM), runs hourly, fires an email if price drops >$75 from previous close.
 
 ---
 
 ## Tech stack
 
-- Python 3.10–3.13 (CrewAI's supported range)
-- `crewai` + `crewai-tools` (core framework, open-source, MIT licensed)
-- LLM: Anthropic Claude via CrewAI's LiteLLM integration (confirm current
-  model alias at build time, e.g. `anthropic/claude-sonnet-4-6`)
-- Transcription: a separate provider — Claude does not natively transcribe
-  audio. OpenAI Whisper API or equivalent (confirm current model
-  name/pricing at build time)
-- `yt-dlp` for YouTube audio download
-- Email: Resend or equivalent (confirm current free tier at build time)
-- Scheduling: GitHub Actions scheduled workflows (`cron`), free tier
-- Package management: `uv` + `pyproject.toml` (CrewAI's CLI scaffolds this
-  way by default — don't fight it)
+| Component | Choice | Why |
+|---|---|---|
+| Agent framework | CrewAI (open-source) | Role/goal/backstory model fits this project's shape naturally |
+| LLM | Anthropic Claude Sonnet | Strong instruction-following; explicit attribution in prompts |
+| Price data | Yahoo Finance (no key) | Free, reliable, no quota |
+| YouTube monitoring | Public RSS feed (no key) | No API key, no quota; 15 most recent videos per channel |
+| Transcription | YouTube auto-captions | Free, instant; no audio download needed for captioned videos |
+| Email delivery | Resend | Simple API, generous free tier |
+| Scheduling | GitHub Actions cron | Free tier covers daily + hourly runs comfortably |
+| Package management | uv | CrewAI's default; fast dependency resolution |
 
 ---
 
@@ -89,146 +68,120 @@ any changes to prompts or task descriptions.
 ```
 sreeram-agent-crew/
 ├── .github/workflows/
-│   └── daily-digest.yml          Scheduled workflow, runs the full crew
-├── src/
-│   └── sreeram_crew/
-│       ├── config/
-│       │   ├── agents.yaml       Gold/Silver/Final agent definitions
-│       │   └── tasks.yaml        Task descriptions per agent
-│       ├── tools/
-│       │   ├── price_tool.py     PriceLookupTool
-│       │   ├── youtube_tool.py   YoutubeNewUploadsTool
-│       │   ├── transcribe_tool.py TranscribeVideoTool
-│       │   └── email_tool.py     SendEmailTool
-│       ├── crew.py               Crew assembly
-│       └── main.py               Entry point
+│   ├── daily-digest.yml          Runs the full crew every morning
+│   └── price-alert.yml           Hourly price drop check (no LLM)
+├── src/sreeram_crew_scaffold/
+│   ├── config/
+│   │   ├── agents.yaml           Agent role/goal/backstory definitions
+│   │   └── tasks.yaml            Task descriptions and expected outputs
+│   ├── tools/
+│   │   ├── price_tool.py         Live spot price via Yahoo Finance
+│   │   ├── youtube_tool.py       RSS-based new-upload detection with dedup
+│   │   ├── transcribe_tool.py    YouTube caption fetcher with retry/backoff
+│   │   └── email_tool.py         Resend-based HTML email sender
+│   ├── price_alert.py            Standalone hourly alert script
+│   ├── crew.py                   Crew assembly (agents + tasks + LLM config)
+│   └── main.py                   Entry point
 ├── state/
-│   ├── gold_seen.json            Tracked video IDs (committed back each run)
+│   ├── gold_seen.json            Video IDs already processed (committed each run)
 │   └── silver_seen.json
-├── .env.example
+├── .env.example                  Template for local development
 ├── pyproject.toml
-└── README.md                     This file
+└── uv.lock
 ```
 
 ---
 
-## Agent / Task design (reference — full YAML lives in config/)
+## Running locally
 
-**gold_agent**: role "Gold Market Research Analyst." Tools: price lookup,
-YouTube new-uploads checker, video transcriber. Backstory emphasizes never
-stating a prediction as fact, always attributing it, flagging disagreement
-between sources rather than picking a side.
+**Prerequisites:** Python 3.10–3.13, [uv](https://docs.astral.sh/uv/)
 
-**silver_agent**: identical pattern, silver.
+```bash
+git clone https://github.com/sreeramg-hub/sreeram-agent-crew.git
+cd sreeram-agent-crew
 
-**final_agent**: role "Daily Digest Editor." Tool: send email. Backstory:
-"You are an editor, not an analyst. You don't add new claims — you
-organize and clarify what the specialist agents already found."
-`allow_delegation: false` on all three agents to avoid delegation loops
-(per CrewAI's own troubleshooting guidance — only a true manager agent in
-a hierarchical process should have delegation enabled, and we're not using
-a hierarchical process for v1).
+# Install dependencies
+uv sync
 
-**Process**: `Process.sequential`. Gold and Silver tasks run, then
-`compose_digest_task` runs with `context: [gold_research_task,
-silver_research_task]` — this is CrewAI's native way of passing both
-agents' outputs into the Final Agent's task, replacing any need for manual
-JSON file handoff between agents.
+# Configure environment
+cp .env.example .env
+# Edit .env and fill in your API keys and channel IDs
 
----
+# Run the full digest crew
+uv run crewai run
 
-## Tools (custom BaseTool subclasses)
-
-Each tool lives in `tools/` as a `BaseTool` subclass with a Pydantic
-`args_schema` for its inputs (current CrewAI convention — see CrewAI docs
-for the exact base pattern if unsure).
-
-- **PriceLookupTool**: takes `metal` ("gold" or "silver"), returns current
-  price + % change from previously recorded price (stored in `state/`).
-  Free price API, e.g. gold-api.com (no key needed) — confirm reliability
-  at build time, swap if needed.
-- **YoutubeNewUploadsTool**: takes comma-separated channel IDs, checks each
-  channel's public RSS feed (`https://www.youtube.com/feeds/videos.xml?channel_id=...`
-  — no API key, no quota) against `state/{agent}_seen.json`, returns any
-  videos not yet seen, updates seen-state.
-- **TranscribeVideoTool**: takes a video URL, downloads audio via `yt-dlp`,
-  sends to a transcription API, returns full transcript text, cleans up
-  the audio file afterward.
-- **SendEmailTool**: takes subject + HTML body, sends via the chosen email
-  API. Used only by `final_agent`.
+# Run the price alert check
+uv run python -m sreeram_crew_scaffold.price_alert
+```
 
 ---
 
-## State management
+## Configuration
 
-`state/gold_seen.json` and `state/silver_seen.json` track which video IDs
-have already been processed, so the same upload is never summarized twice.
-On first run, seed these files with whatever's currently in each channel's
-feed — there is no backlog processing; only genuinely new uploads going
-forward should be picked up. The GitHub Actions workflow commits updated
-state back to the repo at the end of each run (with `[skip ci]` in the
-commit message to avoid re-triggering itself).
-
----
-
-## Secrets and variables (GitHub repo settings)
+Copy `.env.example` to `.env` for local development. For GitHub Actions, add these as repo secrets and variables.
 
 **Secrets** (Settings → Secrets and variables → Actions → Secrets):
 
-```
-ANTHROPIC_API_KEY
-TRANSCRIPTION_API_KEY
-RESEND_API_KEY
-DIGEST_RECIPIENT_EMAIL
-```
+| Secret | Description |
+|---|---|
+| `ANTHROPIC_API_KEY` | Your Anthropic API key |
+| `RESEND_API_KEY` | Your [Resend](https://resend.com) API key |
+| `DIGEST_RECIPIENT_EMAIL` | Delivery address (comma-separated for multiple) |
+| `YOUTUBE_COOKIES` | *(Optional)* Full contents of a Netscape `cookies.txt` exported from your browser — bypasses YouTube IP blocks on cloud runners |
 
-**Variables** (same location, Variables tab — not sensitive, so variables not secrets):
+**Variables** (Settings → Secrets and variables → Actions → Variables):
 
-```
-GOLD_CHANNEL_IDS      (comma-separated YouTube channel IDs)
-SILVER_CHANNEL_IDS    (comma-separated YouTube channel IDs)
-```
+| Variable | Example value |
+|---|---|
+| `GOLD_CHANNEL_IDS` | `UC9ijza42jVR3T6b8bColgvg,UCE_edD0qJd_EyfwGCfLHSeQ` |
+| `SILVER_CHANNEL_IDS` | `UC9ijza42jVR3T6b8bColgvg` |
 
-For local development, copy `.env.example` to `.env` and fill in the same
-values.
-
----
-
-## Build checkpoints (work through in order; test before moving on)
-
-1. **Scaffold via CrewAI CLI** — `crewai create crew sreeram-agent-crew` (or
-   equivalent within this existing repo), confirm the default example crew
-   runs successfully before customizing anything.
-2. **Price tool standalone** — build and test `PriceLookupTool._run()` directly, no agent involved yet.
-3. **YouTube tool standalone** — build and test `YoutubeNewUploadsTool._run()` directly with 1-2 real channel IDs; verify new-vs-seen detection by clearing state and re-running.
-4. **Transcribe tool standalone** — test against one real video URL, spot-check transcript accuracy.
-5. **Gold Agent alone** — minimal single-agent crew, no Final Agent yet. Run and inspect output structure/attribution/sentiment tagging.
-6. **Add Silver Agent** — both research agents running sequentially, each producing correct independent output.
-7. **Email tool + Final Agent** — full three-agent crew, end-to-end run, confirm email arrives correctly composed with attribution preserved and disclaimer present.
-8. **GitHub Actions** — workflow YAML, secrets/variables configured, trigger via `workflow_dispatch`, confirm successful run + state commit-back + email delivery.
-9. **Schedule + soak test** — finalize cron timing, let it run unattended for 2-3 real days, confirm no duplicate processing and consistent delivery.
-
-Each checkpoint should be reviewed and confirmed working before proceeding
-to the next — don't let the build run ahead through multiple checkpoints
-unsupervised.
+**Finding a YouTube channel ID:** run `yt-dlp --dump-single-json "https://www.youtube.com/@ChannelName/videos" --playlist-items 1 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('channel_id'))"` or search for `"channelId"` in the channel page's source.
 
 ---
 
-## Open items to confirm during build (don't assume — verify at build time)
+## Scheduling
 
-- Current CrewAI LiteLLM model string format for Claude
-- Current transcription API model name and pricing
-- Current Resend (or chosen email provider) free tier limits
-- Gold/Silver YouTube channel IDs to track (provided separately, not yet finalized)
-- Preferred cron time in UTC for desired local delivery time
+| Workflow | Schedule | What it does |
+|---|---|---|
+| `daily-digest.yml` | 11:00 UTC daily | Full crew — price + YouTube + digest email |
+| `price-alert.yml` | Every hour | Price check only — alert email if drop > $75 |
+
+Adjust the `cron:` line in each workflow file to change the timing. [crontab.guru](https://crontab.guru) is useful for testing cron expressions.
+
+To trigger either workflow manually: **Actions → workflow name → Run workflow**.
 
 ---
 
-## Relationship to sreeram-agent-skills
+## Design decisions
 
-Once tools/patterns here are proven stable (roughly after checkpoint 7),
-extract generalized, documented versions into the `sreeram-agent-skills`
-repo for others to learn from or reuse. That repo is documentation- and
-education-first; this repo is execution-first. Don't let the skills repo's
-structure dictate this repo's code shape — extract and generalize after
-the fact, not before.
+**Attribution over synthesis** — every price target or opinion in the digest is attributed to whoever said it ("Jordan Roy-Byrne of TheDailyGold said..."), never stated as a fact. The Final Agent is explicitly an editor, not an analyst. The digest includes a disclaimer that it is compiled from public sources for personal research and does not constitute financial advice.
+
+**No CrewAI cloud platform** — this uses the open-source `crewai` Python package only. All execution happens on GitHub Actions runners calling the Anthropic API directly. No CrewAI execution quota, no hosted infrastructure dependency.
+
+**RSS over YouTube Data API** — YouTube's public RSS feed (`youtube.com/feeds/videos.xml?channel_id=...`) requires no API key and has no quota. It returns the 15 most recent videos per channel, which is enough for daily monitoring of active channels.
+
+**Seen-state in git** — processed video IDs are stored in `state/*.json` and committed back to the repo after each run (`[skip ci]` prevents re-triggering). No database needed; git history doubles as an audit log.
+
+**Captions over audio transcription** — YouTube auto-generated captions are fetched directly via `youtube-transcript-api` (no download, no cost, instant). `yt-dlp` + a transcription API would be the fallback for videos without captions, but the channels tracked here all have captions.
+
+---
+
+## Known limitations
+
+- **YouTube caption rate limiting** — making many transcript requests in quick succession from the same IP can trigger a temporary block. The tool retries with exponential backoff and falls back to a title-only summary if all retries fail. On cloud runners, adding a `YOUTUBE_COOKIES` secret resolves persistent blocks.
+- **RSS feed depth** — the YouTube RSS feed only returns the 15 most recent videos. If more than 15 videos are published between runs (unlikely for the channels tracked), older ones will be missed.
+- **Resend free tier** — without a verified custom domain, Resend restricts sending to your own email address only. See [resend.com/domains](https://resend.com/domains) to add a domain and lift this restriction.
+- **Price alert is daily-delta only** — the `$75 drop` threshold compares current price to the previous day's close, not to an intraday peak. A recovery followed by a drop won't re-trigger unless it crosses the threshold vs. the original close.
+
+---
+
+## Companion repo
+
+**[sreeram-agent-skills](https://github.com/sreeramg-hub/sreeram-agent-skills)** extracts the reusable patterns from this project — YouTube RSS watching, caption transcription, CrewAI tool patterns, GitHub Actions scheduling with state commit-back, and attributed-sentiment prompting. If you want to adapt any of these for your own use case, start there.
+
+---
+
+## License
+
+MIT
