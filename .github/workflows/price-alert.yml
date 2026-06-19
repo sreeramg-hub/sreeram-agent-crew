@@ -2,7 +2,7 @@ name: Price Drop Alert
 
 on:
   schedule:
-    - cron: "0 * * * *"  # every hour
+    - cron: "15 * * * *"  # every hour at :15 past the hour
   workflow_dispatch:       # allow manual trigger for testing
 
 jobs:
