@@ -25,5 +25,6 @@ jobs:
         env:
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           DIGEST_RECIPIENT_EMAIL: ${{ secrets.DIGEST_RECIPIENT_EMAIL }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
           PRICE_ALERT_THRESHOLD_USD: "75"
         run: uv run python -m sreeram_crew_scaffold.price_alert

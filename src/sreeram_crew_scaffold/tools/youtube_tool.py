@@ -49,6 +49,7 @@ class YoutubeNewUploadsTool(BaseTool):
         metal = metal.lower().strip()
         seen = _load_seen(metal)
         new_videos = []
+        channel_names = []
 
         for channel_id in [c.strip() for c in channel_ids.split(",") if c.strip()]:
             url = RSS_URL.format(channel_id=channel_id)
@@ -57,10 +58,12 @@ class YoutubeNewUploadsTool(BaseTool):
                 resp.raise_for_status()
                 root = ET.fromstring(resp.text)
             except Exception as e:
+                channel_names.append(channel_id)
                 new_videos.append(f"[ERROR fetching channel {channel_id}: {e}]")
                 continue
 
             channel_title = getattr(root.find(f"{NS_ATOM}title"), "text", channel_id)
+            channel_names.append(channel_title)
 
             for entry in root.findall(f"{NS_ATOM}entry"):
                 vid_id_el = entry.find(f"{NS_YT}videoId")
@@ -82,7 +85,8 @@ class YoutubeNewUploadsTool(BaseTool):
         _save_seen(metal, seen)
 
         if not new_videos:
-            return f"No new {metal} videos found across {len(channel_ids.split(','))} channel(s)."
+            names = ", ".join(channel_names)
+            return f"No new {metal} videos found. Channels checked: {names}."
 
         header = f"Found {len(new_videos)} new video(s) for {metal}:\n"
         return header + "\n".join(new_videos)
