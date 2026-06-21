@@ -1,4 +1,4 @@
-name: Price Drop Alert
+name: Price Alert
 
 on:
   schedule:
@@ -8,6 +8,8 @@ on:
 jobs:
   check-prices:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write  # needed to commit last-seen price state
 
     steps:
       - name: Checkout repo
@@ -23,8 +25,14 @@ jobs:
 
       - name: Run price alert check
         env:
-          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-          DIGEST_RECIPIENT_EMAIL: ${{ secrets.DIGEST_RECIPIENT_EMAIL }}
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
           PRICE_ALERT_THRESHOLD_USD: "75"
         run: uv run python -m sreeram_crew_scaffold.price_alert
+
+      - name: Commit updated price state
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add state/price_last_seen.json
+          git diff --staged --quiet || git commit -m "chore: update price seen state [skip ci]"
+          git push
