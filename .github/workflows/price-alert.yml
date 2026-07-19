@@ -3,13 +3,18 @@ name: Price Alert
 on:
   schedule:
     - cron: "15 * * * *"  # every hour at :15 past the hour
-  workflow_dispatch:       # allow manual trigger for testing
+  workflow_dispatch:
+    inputs:
+      test_ntfy:
+        description: "Send a test ntfy notification to verify delivery (yes/no)"
+        required: false
+        default: "no"
 
 jobs:
   check-prices:
     runs-on: ubuntu-latest
     permissions:
-      contents: write  # needed to commit last-seen price state
+      contents: write
 
     steps:
       - name: Checkout repo
@@ -22,6 +27,22 @@ jobs:
 
       - name: Install Python + dependencies
         run: uv sync
+
+      - name: Test ntfy delivery (manual trigger only)
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.test_ntfy == 'yes' }}
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        run: |
+          echo "NTFY_TOPIC is set: $([ -n "$NTFY_TOPIC" ] && echo YES || echo NO)"
+          echo "Posting test notification to ntfy.sh/$NTFY_TOPIC ..."
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -d "Test from GitHub Actions — ntfy is working!" \
+            -H "Title: Gold & Silver Agent — Test" \
+            -H "Priority: high" \
+            -H "Tags: white_check_mark" \
+            "https://ntfy.sh/$NTFY_TOPIC")
+          echo "HTTP status: $STATUS"
+          [ "$STATUS" = "200" ] && echo "SUCCESS" || echo "FAILED — check NTFY_TOPIC secret"
 
       - name: Run price alert check
         env:
