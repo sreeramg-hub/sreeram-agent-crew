@@ -7,13 +7,16 @@ gold_research_task:
     3. For each new video returned, use transcribe_video on its URL to get the
        full transcript, then summarise the key points with explicit attribution
        (e.g. "Jordan Roy-Byrne said...", "According to Kitco's guest X...").
+       If transcribe_video returns TRANSCRIPT_UNAVAILABLE, do NOT retry —
+       instead write a one-sentence note: "[Channel name] published '[title]'
+       on [date] — transcript not yet available, check back tomorrow."
     If no new videos are found, note that explicitly.
     Every price target or prediction must be attributed to whoever stated it.
   expected_output: >
     A structured markdown briefing with:
     - Gold price section: current price, % change, direction
-    - New videos section: for each video, channel name, title, date, and a
-      3-5 sentence attributed summary of key points
+    - New videos section: for each video, channel name, title, date, and either
+      a 3-5 sentence attributed summary OR a note that the transcript is not yet available
     - If sources disagree on direction, flag it explicitly
     - "No new videos today" if youtube_new_uploads returned none
   agent: gold_agent
@@ -26,13 +29,16 @@ silver_research_task:
        to find any new videos not yet processed.
     3. For each new video returned, use transcribe_video on its URL to get the
        full transcript, then summarise the key points with explicit attribution.
+       If transcribe_video returns TRANSCRIPT_UNAVAILABLE, do NOT retry —
+       instead write a one-sentence note: "[Channel name] published '[title]'
+       on [date] — transcript not yet available, check back tomorrow."
     If no new videos are found, note that explicitly.
     Every price target or prediction must be attributed to whoever stated it.
   expected_output: >
     A structured markdown briefing with:
     - Silver price section: current price, % change, direction
-    - New videos section: for each video, channel name, title, date, and a
-      3-5 sentence attributed summary of key points
+    - New videos section: for each video, channel name, title, date, and either
+      a 3-5 sentence attributed summary OR a note that the transcript is not yet available
     - If sources disagree on direction, flag it explicitly
     - "No new videos today" if youtube_new_uploads returned none
   agent: silver_agent

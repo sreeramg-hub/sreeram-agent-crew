@@ -78,18 +78,18 @@ class TranscribeVideoTool(BaseTool):
                 return f"[Transcript — {word_count} words]\n\n{full_text}"
 
             except TranscriptsDisabled:
-                return f"Transcripts are disabled for video {video_id}."
+                return f"TRANSCRIPT_UNAVAILABLE: Transcripts are disabled for video {video_id}."
             except NoTranscriptFound:
                 return (
-                    f"No English transcript found for video {video_id}. "
-                    "The video may not have captions yet."
+                    f"TRANSCRIPT_UNAVAILABLE: No captions found for video {video_id}. "
+                    "The video was likely published recently and captions have not been generated yet."
                 )
             except Exception as e:
                 last_error = e
                 continue  # retry
 
         return (
-            f"Failed to fetch transcript for {video_id} after {_MAX_RETRIES} attempts: {last_error}\n"
-            "If running on a cloud IP, set YOUTUBE_COOKIES_FILE=cookies.txt in your .env "
-            "(export cookies from your browser using the 'Get cookies.txt LOCALLY' extension)."
+            f"TRANSCRIPT_UNAVAILABLE: Could not fetch transcript for {video_id} "
+            f"after {_MAX_RETRIES} attempts ({last_error}). "
+            "Summarise this video from its title and publish date only."
         )
