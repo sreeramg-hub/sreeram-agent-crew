@@ -4,21 +4,22 @@ gold_research_task:
     1. Use price_lookup with metal="gold" to get the current price and % change.
     2. Use youtube_new_uploads with metal="gold" and channel_ids="{gold_channel_ids}"
        to find any new videos not yet processed.
-    3. For each new video returned, use transcribe_video on its URL to get the
-       full transcript, then summarise the key points with explicit attribution
-       (e.g. "Jordan Roy-Byrne said...", "According to Kitco's guest X...").
-       If transcribe_video returns TRANSCRIPT_UNAVAILABLE, do NOT retry —
-       instead write a one-sentence note: "[Channel name] published '[title]'
-       on [date] — transcript not yet available, check back tomorrow."
-    If no new videos are found, note that explicitly.
+    3. For each video returned (both NEW and RETRY), call transcribe_video with
+       video_url=<url> AND metal="gold". Always pass metal so the retry queue
+       stays accurate.
+       - If transcript is returned: summarise key points with explicit attribution
+         (e.g. "Jordan Roy-Byrne said...", "According to Kitco's guest X...").
+       - If TRANSCRIPT_UNAVAILABLE is returned: write one line —
+         "[Channel] — '[title]' ([date]): transcript not yet available, queued for retry."
+    If no new or retry videos are found, note that explicitly.
     Every price target or prediction must be attributed to whoever stated it.
   expected_output: >
     A structured markdown briefing with:
     - Gold price section: current price, % change, direction
     - New videos section: for each video, channel name, title, date, and either
-      a 3-5 sentence attributed summary OR a note that the transcript is not yet available
+      a 3-5 sentence attributed summary OR a "queued for retry" note
     - If sources disagree on direction, flag it explicitly
-    - "No new videos today" if youtube_new_uploads returned none
+    - "No new videos today" if youtube_new_uploads returned none and no retries
   agent: gold_agent
 
 silver_research_task:
@@ -26,21 +27,22 @@ silver_research_task:
     Produce today's silver market briefing using your tools in this order:
     1. Use price_lookup with metal="silver" to get the current price and % change.
     2. Use youtube_new_uploads with metal="silver" and channel_ids="{silver_channel_ids}"
-       to find any new videos not yet processed.
-    3. For each new video returned, use transcribe_video on its URL to get the
-       full transcript, then summarise the key points with explicit attribution.
-       If transcribe_video returns TRANSCRIPT_UNAVAILABLE, do NOT retry —
-       instead write a one-sentence note: "[Channel name] published '[title]'
-       on [date] — transcript not yet available, check back tomorrow."
-    If no new videos are found, note that explicitly.
+       to find any new videos not yet processed, plus any pending retries.
+    3. For each video returned (both NEW and RETRY), call transcribe_video with
+       video_url=<url> AND metal="silver". Always pass metal so the retry queue
+       stays accurate.
+       - If transcript is returned: summarise key points with explicit attribution.
+       - If TRANSCRIPT_UNAVAILABLE is returned: write one line —
+         "[Channel] — '[title]' ([date]): transcript not yet available, queued for retry."
+    If no new or retry videos are found, note that explicitly.
     Every price target or prediction must be attributed to whoever stated it.
   expected_output: >
     A structured markdown briefing with:
     - Silver price section: current price, % change, direction
     - New videos section: for each video, channel name, title, date, and either
-      a 3-5 sentence attributed summary OR a note that the transcript is not yet available
+      a 3-5 sentence attributed summary OR a "queued for retry" note
     - If sources disagree on direction, flag it explicitly
-    - "No new videos today" if youtube_new_uploads returned none
+    - "No new videos today" if youtube_new_uploads returned none and no retries
   agent: silver_agent
 
 compose_digest_task:

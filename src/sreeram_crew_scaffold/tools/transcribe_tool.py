@@ -1,25 +1,15 @@
 import os
 import re
 import time
-from typing import Type
+from typing import Literal, Optional, Type
 
 from crewai.tools import BaseTool
 from pydantic import BaseModel, Field
 from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api._errors import NoTranscriptFound, TranscriptsDisabled
 
-# Seconds to wait between transcript fetches to avoid YouTube rate-limiting.
-# Increase if you're processing many videos in one run.
 _FETCH_DELAY_SECONDS = float(os.getenv("TRANSCRIPT_FETCH_DELAY", "5"))
-
-# Number of times to retry a blocked request before giving up.
 _MAX_RETRIES = int(os.getenv("TRANSCRIPT_MAX_RETRIES", "2"))
-
-# Optional: path to a Netscape-format cookies.txt file exported from your browser.
-# Required when running on cloud IPs (GitHub Actions) that YouTube blocks by default.
-# Export using the "Get cookies.txt LOCALLY" browser extension, save as cookies.txt
-# in the repo root, then set YOUTUBE_COOKIES_FILE=cookies.txt in your .env.
-# Add cookies.txt to .gitignore — never commit it.
 _COOKIES_FILE = os.getenv("YOUTUBE_COOKIES_FILE", "")
 
 
@@ -37,18 +27,29 @@ class TranscribeVideoInput(BaseModel):
     video_url: str = Field(
         ..., description="YouTube video URL or video ID to transcribe."
     )
+    metal: Optional[Literal["gold", "silver"]] = Field(
+        None,
+        description=(
+            "Which metal this video belongs to ('gold' or 'silver'). "
+            "Pass this so successful transcriptions are removed from the retry queue."
+        ),
+    )
 
 
 class TranscribeVideoTool(BaseTool):
     name: str = "transcribe_video"
     description: str = (
         "Fetches the transcript of a YouTube video using auto-generated captions. "
-        "Returns the full transcript as plain text. "
-        "Input: a YouTube video URL or video ID."
+        "Returns the full transcript as plain text, or TRANSCRIPT_UNAVAILABLE if "
+        "captions are not ready yet. Always pass metal='gold' or metal='silver' "
+        "so the retry queue stays accurate."
     )
     args_schema: Type[BaseModel] = TranscribeVideoInput
 
-    def _run(self, video_url: str) -> str:
+    def _run(self, video_url: str, metal: Optional[str] = None) -> str:
+        # Import here to avoid circular import
+        from sreeram_crew_scaffold.tools.youtube_tool import remove_from_pending
+
         video_id = _extract_video_id(video_url.strip())
         if not video_id:
             return f"Could not extract a video ID from: {video_url}"
@@ -60,7 +61,7 @@ class TranscribeVideoTool(BaseTool):
         last_error = None
         for attempt in range(_MAX_RETRIES):
             if attempt > 0:
-                wait = _FETCH_DELAY_SECONDS * (2 ** attempt)  # exponential backoff
+                wait = _FETCH_DELAY_SECONDS * (2 ** attempt)
                 time.sleep(wait)
             else:
                 time.sleep(_FETCH_DELAY_SECONDS)
@@ -75,6 +76,11 @@ class TranscribeVideoTool(BaseTool):
                 snippets = transcript.fetch()
                 full_text = " ".join(s.text for s in snippets)
                 word_count = len(full_text.split())
+
+                # Success — remove from pending retry queue
+                if metal:
+                    remove_from_pending(metal.lower(), video_id)
+
                 return f"[Transcript — {word_count} words]\n\n{full_text}"
 
             except TranscriptsDisabled:
@@ -82,14 +88,13 @@ class TranscribeVideoTool(BaseTool):
             except NoTranscriptFound:
                 return (
                     f"TRANSCRIPT_UNAVAILABLE: No captions found for video {video_id}. "
-                    "The video was likely published recently and captions have not been generated yet."
+                    "The video was likely published recently — will retry next run."
                 )
             except Exception as e:
                 last_error = e
-                continue  # retry
+                continue
 
         return (
             f"TRANSCRIPT_UNAVAILABLE: Could not fetch transcript for {video_id} "
-            f"after {_MAX_RETRIES} attempts ({last_error}). "
-            "Summarise this video from its title and publish date only."
+            f"after {_MAX_RETRIES} attempts ({last_error}). Will retry next run."
         )

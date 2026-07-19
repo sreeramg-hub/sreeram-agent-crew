@@ -26,6 +26,26 @@ def _save_seen(metal: str, seen: set) -> None:
     path.write_text(json.dumps(sorted(seen), indent=2))
 
 
+def load_pending(metal: str) -> dict:
+    """Returns {video_id: {title, url, channel, date, attempts}} for videos awaiting transcription."""
+    path = STATE_DIR / f"{metal}_pending.json"
+    if path.exists():
+        return json.loads(path.read_text())
+    return {}
+
+
+def save_pending(metal: str, pending: dict) -> None:
+    path = STATE_DIR / f"{metal}_pending.json"
+    path.write_text(json.dumps(pending, indent=2))
+
+
+def remove_from_pending(metal: str, video_id: str) -> None:
+    pending = load_pending(metal)
+    if video_id in pending:
+        del pending[video_id]
+        save_pending(metal, pending)
+
+
 class YoutubeNewUploadsInput(BaseModel):
     channel_ids: str = Field(
         ..., description="Comma-separated YouTube channel IDs to check for new uploads."
@@ -38,9 +58,9 @@ class YoutubeNewUploadsInput(BaseModel):
 class YoutubeNewUploadsTool(BaseTool):
     name: str = "youtube_new_uploads"
     description: str = (
-        "Checks a list of YouTube channels for videos not yet processed. "
-        "Returns new video IDs, titles, URLs, and published dates. "
-        "Updates the seen-state so the same video is never returned twice. "
+        "Checks a list of YouTube channels for videos not yet processed, "
+        "and also returns any videos from previous runs where transcription failed. "
+        "Returns video titles, URLs, published dates, and whether each is new or a retry. "
         "Inputs: comma-separated channel_ids, metal ('gold' or 'silver')."
     )
     args_schema: Type[BaseModel] = YoutubeNewUploadsInput
@@ -48,9 +68,11 @@ class YoutubeNewUploadsTool(BaseTool):
     def _run(self, channel_ids: str, metal: str) -> str:
         metal = metal.lower().strip()
         seen = _load_seen(metal)
-        new_videos = []
+        pending = load_pending(metal)
+        lines = []
         channel_names = []
 
+        # --- New videos from RSS ---
         for channel_id in [c.strip() for c in channel_ids.split(",") if c.strip()]:
             url = RSS_URL.format(channel_id=channel_id)
             try:
@@ -59,7 +81,7 @@ class YoutubeNewUploadsTool(BaseTool):
                 root = ET.fromstring(resp.text)
             except Exception as e:
                 channel_names.append(channel_id)
-                new_videos.append(f"[ERROR fetching channel {channel_id}: {e}]")
+                lines.append(f"[ERROR fetching channel {channel_id}: {e}]")
                 continue
 
             channel_title = getattr(root.find(f"{NS_ATOM}title"), "text", channel_id)
@@ -77,16 +99,44 @@ class YoutubeNewUploadsTool(BaseTool):
                 published = getattr(entry.find(f"{NS_ATOM}published"), "text", "")[:10]
                 video_url = f"https://www.youtube.com/watch?v={vid_id}"
 
-                new_videos.append(
-                    f"- [{channel_title}] {published} | {title}\n  URL: {video_url}\n  ID: {vid_id}"
+                lines.append(
+                    f"- [NEW] [{channel_title}] {published} | {title}\n"
+                    f"  URL: {video_url}\n  ID: {vid_id}"
                 )
                 seen.add(vid_id)
+                # Add to pending — transcribe_video removes it on success
+                pending[vid_id] = {
+                    "title": title,
+                    "url": video_url,
+                    "channel": channel_title,
+                    "date": published,
+                    "attempts": 0,
+                }
 
         _save_seen(metal, seen)
 
-        if not new_videos:
-            names = ", ".join(channel_names)
-            return f"No new {metal} videos found. Channels checked: {names}."
+        # --- Pending retries from previous runs ---
+        retry_lines = []
+        for vid_id, meta in pending.items():
+            retry_lines.append(
+                f"- [RETRY — transcript failed previously] [{meta['channel']}] "
+                f"{meta['date']} | {meta['title']}\n"
+                f"  URL: {meta['url']}\n  ID: {vid_id}"
+            )
+            pending[vid_id]["attempts"] = meta.get("attempts", 0) + 1
 
-        header = f"Found {len(new_videos)} new video(s) for {metal}:\n"
-        return header + "\n".join(new_videos)
+        save_pending(metal, pending)
+
+        if not lines and not retry_lines:
+            names = ", ".join(channel_names)
+            return f"No new {metal} videos and no pending retries. Channels checked: {names}."
+
+        result = []
+        if lines:
+            result.append(f"NEW videos ({len(lines)}):\n" + "\n".join(lines))
+        if retry_lines:
+            result.append(
+                f"RETRY videos — transcription failed on a previous run ({len(retry_lines)}):\n"
+                + "\n".join(retry_lines)
+            )
+        return "\n\n".join(result)
