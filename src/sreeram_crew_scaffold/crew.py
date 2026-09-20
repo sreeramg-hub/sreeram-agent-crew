@@ -4,9 +4,6 @@ import pathlib
 from crewai import Agent, Crew, LLM, Process, Task
 from crewai.project import CrewBase, agent, crew, task
 from crewai.agents.agent_builder.base_agent import BaseAgent
-from crewai.tools import BaseTool
-from pydantic import BaseModel, Field
-from typing import Type
 
 # Explicitly use Anthropic so the crew never falls back to OpenAI
 _LLM = LLM(
@@ -14,29 +11,12 @@ _LLM = LLM(
     api_key=os.getenv("ANTHROPIC_API_KEY"),
 )
 
-from sreeram_crew_scaffold.tools.price_tool import PriceLookupTool
 from sreeram_crew_scaffold.tools.youtube_tool import YoutubeNewUploadsTool
-from sreeram_crew_scaffold.tools.email_tool import SendEmailTool
-
-
-class ReadFileInput(BaseModel):
-    path: str = Field(..., description="Relative path to the file to read.")
-
-class ReadFileTool(BaseTool):
-    name: str = "read_file"
-    description: str = "Reads the full contents of a local file. Input: path (string)."
-    args_schema: Type[BaseModel] = ReadFileInput
-
-    def _run(self, path: str) -> str:
-        try:
-            return pathlib.Path(path).read_text(encoding="utf-8")
-        except Exception as e:
-            return f"Error reading {path}: {e}"
 
 
 @CrewBase
 class SreeramCrewScaffold():
-    """Gold & Silver daily digest crew"""
+    """Gold & Silver video-links crew (the tech half of the digest is plain Python in tech/)"""
 
     agents: list[BaseAgent]
     tasks: list[Task]
@@ -47,7 +27,7 @@ class SreeramCrewScaffold():
     def gold_agent(self) -> Agent:
         return Agent(
             config=self.agents_config['gold_agent'],
-            tools=[PriceLookupTool(), YoutubeNewUploadsTool()],
+            tools=[YoutubeNewUploadsTool()],
             llm=_LLM,
             verbose=True,
         )
@@ -56,7 +36,7 @@ class SreeramCrewScaffold():
     def silver_agent(self) -> Agent:
         return Agent(
             config=self.agents_config['silver_agent'],
-            tools=[PriceLookupTool(), YoutubeNewUploadsTool()],
+            tools=[YoutubeNewUploadsTool()],
             llm=_LLM,
             verbose=True,
         )
@@ -65,7 +45,6 @@ class SreeramCrewScaffold():
     def final_agent(self) -> Agent:
         return Agent(
             config=self.agents_config['final_agent'],
-            tools=[ReadFileTool(), SendEmailTool()],
             llm=_LLM,
             verbose=True,
         )
@@ -89,14 +68,7 @@ class SreeramCrewScaffold():
         return Task(
             config=self.tasks_config['compose_digest_task'],
             context=[self.gold_research_task(), self.silver_research_task()],
-            output_file='digest.html',
-        )
-
-    @task
-    def send_digest_task(self) -> Task:
-        return Task(
-            config=self.tasks_config['send_digest_task'],
-            context=[self.compose_digest_task()],
+            output_file='metals.html',
         )
 
     # ── Crew ──────────────────────────────────────────────────────────────────
@@ -113,8 +85,8 @@ class SreeramCrewScaffold():
 
     @staticmethod
     def _strip_code_fences(task_output) -> None:
-        """Remove markdown code fences from digest.html if the LLM added them."""
-        digest = pathlib.Path("digest.html")
+        """Remove markdown code fences from metals.html if the LLM added them."""
+        digest = pathlib.Path("metals.html")
         if not digest.exists():
             return
         content = digest.read_text(encoding="utf-8").strip()

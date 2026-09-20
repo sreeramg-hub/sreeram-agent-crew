@@ -6,5 +6,6 @@ __pycache__/
 cookies.txt
 
 # state/ is intentionally tracked — committed back each run
-# digest.html is ephemeral — not tracked
+# digest.html (local preview) and metals.html (crew output) are ephemeral
 digest.html
+metals.html
