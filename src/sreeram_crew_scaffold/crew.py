@@ -16,7 +16,6 @@ _LLM = LLM(
 
 from sreeram_crew_scaffold.tools.price_tool import PriceLookupTool
 from sreeram_crew_scaffold.tools.youtube_tool import YoutubeNewUploadsTool
-from sreeram_crew_scaffold.tools.transcribe_tool import TranscribeVideoTool
 from sreeram_crew_scaffold.tools.email_tool import SendEmailTool
 
 
@@ -48,7 +47,7 @@ class SreeramCrewScaffold():
     def gold_agent(self) -> Agent:
         return Agent(
             config=self.agents_config['gold_agent'],
-            tools=[PriceLookupTool(), YoutubeNewUploadsTool(), TranscribeVideoTool()],
+            tools=[PriceLookupTool(), YoutubeNewUploadsTool()],
             llm=_LLM,
             verbose=True,
         )
@@ -57,7 +56,7 @@ class SreeramCrewScaffold():
     def silver_agent(self) -> Agent:
         return Agent(
             config=self.agents_config['silver_agent'],
-            tools=[PriceLookupTool(), YoutubeNewUploadsTool(), TranscribeVideoTool()],
+            tools=[PriceLookupTool(), YoutubeNewUploadsTool()],
             llm=_LLM,
             verbose=True,
         )

@@ -4,22 +4,21 @@ gold_research_task:
     1. Use price_lookup with metal="gold" to get the current price and % change.
     2. Use youtube_new_uploads with metal="gold" and channel_ids="{gold_channel_ids}"
        to find any new videos not yet processed.
-    3. For each video returned (both NEW and RETRY), call transcribe_video with
-       video_url=<url> AND metal="gold". Always pass metal so the retry queue
-       stays accurate.
-       - If transcript is returned: summarise key points with explicit attribution
-         (e.g. "Jordan Roy-Byrne said...", "According to Kitco's guest X...").
-       - If TRANSCRIPT_UNAVAILABLE is returned: write one line —
-         "[Channel] — '[title]' ([date]): transcript not yet available, queued for retry."
-    If no new or retry videos are found, note that explicitly.
-    Every price target or prediction must be attributed to whoever stated it.
+    Videos are NOT transcribed — you only know each video's title, channel,
+    date, link and the channel-written description. For each video, list it
+    with its link and, only if the description says something useful, one short
+    sentence paraphrasing the description (attribute it: "The channel's
+    description says ..."). Never state what was said in the video, and never
+    present a title or description as fact or as a prediction you have verified.
+    If a tool result says some channels could not be checked, say so.
+    If no new videos are found, note that explicitly.
   expected_output: >
     A structured markdown briefing with:
     - Gold price section: current price, % change, direction
-    - New videos section: for each video, channel name, title, date, and either
-      a 3-5 sentence attributed summary OR a "queued for retry" note
-    - If sources disagree on direction, flag it explicitly
-    - "No new videos today" if youtube_new_uploads returned none and no retries
+    - New videos section: for each video, channel name, title (as a markdown
+      link to the video URL), date, and at most one attributed sentence based
+      on the description
+    - "No new videos today" if youtube_new_uploads returned none
   agent: gold_agent
 
 silver_research_task:
@@ -27,22 +26,22 @@ silver_research_task:
     Produce today's silver market briefing using your tools in this order:
     1. Use price_lookup with metal="silver" to get the current price and % change.
     2. Use youtube_new_uploads with metal="silver" and channel_ids="{silver_channel_ids}"
-       to find any new videos not yet processed, plus any pending retries.
-    3. For each video returned (both NEW and RETRY), call transcribe_video with
-       video_url=<url> AND metal="silver". Always pass metal so the retry queue
-       stays accurate.
-       - If transcript is returned: summarise key points with explicit attribution.
-       - If TRANSCRIPT_UNAVAILABLE is returned: write one line —
-         "[Channel] — '[title]' ([date]): transcript not yet available, queued for retry."
-    If no new or retry videos are found, note that explicitly.
-    Every price target or prediction must be attributed to whoever stated it.
+       to find any new videos not yet processed.
+    Videos are NOT transcribed — you only know each video's title, channel,
+    date, link and the channel-written description. For each video, list it
+    with its link and, only if the description says something useful, one short
+    sentence paraphrasing the description (attribute it: "The channel's
+    description says ..."). Never state what was said in the video, and never
+    present a title or description as fact or as a prediction you have verified.
+    If a tool result says some channels could not be checked, say so.
+    If no new videos are found, note that explicitly.
   expected_output: >
     A structured markdown briefing with:
     - Silver price section: current price, % change, direction
-    - New videos section: for each video, channel name, title, date, and either
-      a 3-5 sentence attributed summary OR a "queued for retry" note
-    - If sources disagree on direction, flag it explicitly
-    - "No new videos today" if youtube_new_uploads returned none and no retries
+    - New videos section: for each video, channel name, title (as a markdown
+      link to the video URL), date, and at most one attributed sentence based
+      on the description
+    - "No new videos today" if youtube_new_uploads returned none
   agent: silver_agent
 
 compose_digest_task:
@@ -51,12 +50,13 @@ compose_digest_task:
     agents. Write the complete HTML email digest to the file digest.html.
     The email must:
     1. Open with a one-paragraph market overview (prices only, no opinions).
-    2. Have a Gold section with the attributed summaries.
-    3. Have a Silver section with the attributed summaries.
-    4. End with this exact disclaimer:
-       "This digest is compiled from public YouTube sources for personal research
-       only. All opinions and price targets are attributed to their original
-       sources and do not represent financial advice."
+    2. Have a Gold section with the price and the new videos as clickable links.
+    3. Have a Silver section with the price and the new videos as clickable links.
+    4. Keep every video link exactly as given by the research agents.
+    5. End with this exact disclaimer:
+       "This digest is compiled from public sources for personal research only.
+       Video links point to third-party content that has not been reviewed here,
+       and nothing in this email is financial advice."
     Do NOT call any tools. Just write the HTML content as your final answer
     and it will be saved to digest.html automatically.
     IMPORTANT: Output raw HTML only. Do NOT wrap it in markdown code fences
