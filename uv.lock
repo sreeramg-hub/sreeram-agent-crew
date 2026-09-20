@@ -3287,13 +3287,17 @@ name = "sreeram-crew-scaffold"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "anthropic" },
     { name = "crewai", extra = ["anthropic", "tools"] },
+    { name = "pyyaml" },
     { name = "resend" },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "anthropic", specifier = ">=0.73.0" },
     { name = "crewai", extras = ["anthropic", "tools"], specifier = "==1.14.7" },
+    { name = "pyyaml", specifier = ">=6.0" },
     { name = "resend", specifier = ">=2.32.2" },
 ]
 

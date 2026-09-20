@@ -1,84 +1,61 @@
 gold_research_task:
   description: >
-    Produce today's gold market briefing using your tools in this order:
-    1. Use price_lookup with metal="gold" to get the current price and % change.
-    2. Use youtube_new_uploads with metal="gold" and channel_ids="{gold_channel_ids}"
-       to find any new videos not yet processed.
+    Find today's new gold videos. Use youtube_new_uploads with metal="gold" and
+    channel_ids="{gold_channel_ids}".
     Videos are NOT transcribed — you only know each video's title, channel,
     date, link and the channel-written description. For each video, list it
     with its link and, only if the description says something useful, one short
     sentence paraphrasing the description (attribute it: "The channel's
     description says ..."). Never state what was said in the video, and never
-    present a title or description as fact or as a prediction you have verified.
+    present a title or description as fact.
     If a tool result says some channels could not be checked, say so.
-    If no new videos are found, note that explicitly.
+    If no new videos are found, say so explicitly.
   expected_output: >
-    A structured markdown briefing with:
-    - Gold price section: current price, % change, direction
-    - New videos section: for each video, channel name, title (as a markdown
-      link to the video URL), date, and at most one attributed sentence based
-      on the description
-    - "No new videos today" if youtube_new_uploads returned none
+    A markdown list of new videos. For each: channel name, title as a markdown
+    link to the video URL, date, and at most one attributed sentence based on
+    the description. "No new videos today" if there are none.
   agent: gold_agent
 
 silver_research_task:
   description: >
-    Produce today's silver market briefing using your tools in this order:
-    1. Use price_lookup with metal="silver" to get the current price and % change.
-    2. Use youtube_new_uploads with metal="silver" and channel_ids="{silver_channel_ids}"
-       to find any new videos not yet processed.
+    Find today's new silver videos. Use youtube_new_uploads with metal="silver" and
+    channel_ids="{silver_channel_ids}".
     Videos are NOT transcribed — you only know each video's title, channel,
     date, link and the channel-written description. For each video, list it
     with its link and, only if the description says something useful, one short
     sentence paraphrasing the description (attribute it: "The channel's
     description says ..."). Never state what was said in the video, and never
-    present a title or description as fact or as a prediction you have verified.
+    present a title or description as fact.
     If a tool result says some channels could not be checked, say so.
-    If no new videos are found, note that explicitly.
+    If no new videos are found, say so explicitly.
   expected_output: >
-    A structured markdown briefing with:
-    - Silver price section: current price, % change, direction
-    - New videos section: for each video, channel name, title (as a markdown
-      link to the video URL), date, and at most one attributed sentence based
-      on the description
-    - "No new videos today" if youtube_new_uploads returned none
+    A markdown list of new videos. For each: channel name, title as a markdown
+    link to the video URL, date, and at most one attributed sentence based on
+    the description. "No new videos today" if there are none.
   agent: silver_agent
 
 compose_digest_task:
   description: >
-    You will receive the gold briefing and silver briefing from the research
-    agents. Write the complete HTML email digest to the file digest.html.
-    The email must:
-    1. Open with a one-paragraph market overview (prices only, no opinions).
-    2. Have a Gold section with the price and the new videos as clickable links.
-    3. Have a Silver section with the price and the new videos as clickable links.
-    4. Keep every video link exactly as given by the research agents.
-    5. End with this exact disclaimer:
-       "This digest is compiled from public sources for personal research only.
-       Video links point to third-party content that has not been reviewed here,
-       and nothing in this email is financial advice."
-    Do NOT call any tools. Just write the HTML content as your final answer
-    and it will be saved to digest.html automatically.
-    IMPORTANT: Output raw HTML only. Do NOT wrap it in markdown code fences
-    (no ```html or ``` markers). Start directly with <html> and end with </html>.
+    You receive the gold and silver video reports. Write an HTML fragment for
+    the "Gold & Silver" part of a daily email. The email template already adds
+    the page, the prices and the disclaimer, so do NOT write <html>, <head>,
+    <body>, prices, or a disclaimer.
+    Use only these tags: h3, p, ul, li, a, strong, em.
+    Structure:
+      <h3>Gold</h3> then a <ul> with one <li> per video, or a <p> saying there
+      are no new videos; then <h3>Silver</h3> in the same way.
+    Each <li>: <a href="VIDEO_URL">Title</a> — Channel, date, followed by the
+    attributed sentence if the report has one.
+    If the same video appears in both reports, list it once, under the metal it
+    fits best. Keep every link exactly as given. If a report says some channels
+    could not be checked, keep one short neutral line saying so ("Some channels
+    could not be checked today.") and give no advice about channel IDs or access.
+    Do NOT call any tools. Output raw HTML only — no markdown code fences.
   expected_output: >
-    Raw HTML only — starting with <html> and ending with </html>. No markdown
-    code fences, no commentary before or after. Just the HTML document containing
-    the full daily digest with gold section, silver section, and the required
-    disclaimer.
-  output_file: digest.html
+    Raw HTML fragment only: an h3 "Gold" and an h3 "Silver" section, each with a
+    list of linked videos or a "no new videos" line. No code fences, no commentary.
+  output_file: metals.html
   agent: final_agent
   context:
     - gold_research_task
     - silver_research_task
-
-send_digest_task:
-  description: >
-    The digest HTML has already been written to digest.html by the previous task.
-    Call the send_email tool with only the subject line:
-      subject: "Daily Gold & Silver Digest — {today_date}"
-    The tool reads digest.html automatically — you do not need to pass the body.
-  expected_output: >
-    Confirmation that the email was sent, including the message ID returned
-    by the API, or a clear error message if sending failed.
-  agent: final_agent

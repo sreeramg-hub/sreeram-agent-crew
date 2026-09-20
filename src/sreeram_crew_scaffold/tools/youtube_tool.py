@@ -17,6 +17,9 @@ NS_MEDIA = "{http://search.yahoo.com/mrss/}"
 RSS_URL = "https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}"
 
 FETCH_ATTEMPTS = 3
+
+# Channels that could not be fetched during this run; main.py reads this for the health line.
+FETCH_ERRORS: list[str] = []
 DESCRIPTION_MAX_CHARS = 400
 
 
@@ -94,6 +97,7 @@ class YoutubeNewUploadsTool(BaseTool):
                 root = _fetch_feed(channel_id)
             except Exception as e:
                 errors.append(f"[ERROR fetching channel {channel_id}: {e}]")
+                FETCH_ERRORS.append(channel_id)
                 continue
 
             channel_title = getattr(root.find(f"{NS_ATOM}title"), "text", channel_id)
@@ -131,7 +135,7 @@ class YoutubeNewUploadsTool(BaseTool):
             )
         if errors:
             parts.append(
-                "Some channels could not be checked — mention this in the briefing:\n"
+                "Some channels could not be checked this time — add one short neutral line saying so, with no advice:\n"
                 + "\n".join(errors)
             )
         return "\n\n".join(parts)

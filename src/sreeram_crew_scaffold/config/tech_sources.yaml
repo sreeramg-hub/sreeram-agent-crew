@@ -1,0 +1,105 @@
+# Sources for the tech half of the daily digest.
+# Add or remove a source by editing this file — no code changes needed.
+#
+# Source types:
+#   feed       RSS/Atom feed (needs `url`)
+#   hn         Hacker News front page (optional `min_points`, `keywords` regex)
+#   hf_papers  Hugging Face daily papers (optional `min_upvotes`)
+# `window_hours` (how far back to look) can be set globally, per section, or per
+# source; the most specific wins. Slow blogs need a long window. Items already
+# emailed are remembered, so a long window never causes repeats.
+
+window_hours: 72
+max_per_source: 5       # newest N items kept from each source
+max_candidates: 40      # most items sent to Claude per section
+
+sections:
+  - key: ai
+    title: AI
+    pick: 8
+    window_hours: 72
+    sources:
+      - name: Hacker News
+        type: hn
+        min_points: 150
+        keywords: "\\b(AI|LLMs?|GPT|Claude|Gemini|OpenAI|Anthropic|agents?|neural|transformers?|machine learning|diffusion|Llama|Mistral|DeepSeek)\\b"
+      - name: Hugging Face Papers
+        type: hf_papers
+        min_upvotes: 25
+        window_hours: 120
+      - name: Simon Willison
+        type: feed
+        url: https://simonwillison.net/atom/everything/
+      - name: OpenAI
+        type: feed
+        url: https://openai.com/news/rss.xml
+      - name: Google DeepMind
+        type: feed
+        url: https://deepmind.google/blog/rss.xml
+      - name: Hugging Face Blog
+        type: feed
+        url: https://huggingface.co/blog/feed.xml
+      - name: Latent Space
+        type: feed
+        url: https://www.latent.space/feed
+      - name: GitHub Blog
+        type: feed
+        url: https://github.blog/feed/
+
+  - key: frontend
+    title: Front end
+    pick: 6
+    window_hours: 336   # 2 weeks: most front-end blogs post rarely
+    sources:
+      - name: Hacker News
+        type: hn
+        min_points: 100
+        keywords: "\\b(CSS|JavaScript|TypeScript|React|Vue|Svelte|Next\\.js|browsers?|Chrome|Safari|Firefox|HTML|front-?end|WebAssembly|WASM|Tailwind|Vite|Node\\.js|Deno|Bun)\\b"
+      - name: React
+        type: feed
+        url: https://react.dev/rss.xml
+      - name: Next.js
+        type: feed
+        url: https://nextjs.org/feed.xml
+      - name: Vercel
+        type: feed
+        url: https://vercel.com/atom
+      - name: Tailwind CSS
+        type: feed
+        url: https://tailwindcss.com/feeds/feed.xml
+      - name: web.dev
+        type: feed
+        url: https://web.dev/feed.xml
+      - name: Chrome for Developers
+        type: feed
+        url: https://developer.chrome.com/static/blog/feed.xml
+      - name: MDN Blog
+        type: feed
+        url: https://developer.mozilla.org/en-US/blog/rss.xml
+      - name: CSS-Tricks
+        type: feed
+        url: https://css-tricks.com/feed/
+      - name: Smashing Magazine
+        type: feed
+        url: https://www.smashingmagazine.com/feed/
+      - name: Josh Comeau
+        type: feed
+        url: https://www.joshwcomeau.com/rss.xml
+      - name: Frontend Focus
+        type: feed
+        url: https://frontendfoc.us/rss
+
+  - key: ui
+    title: UI / UX
+    pick: 4
+    window_hours: 168   # 1 week
+    sources:
+      - name: Figma Blog
+        type: feed
+        url: https://www.figma.com/blog/feed/atom.xml
+      - name: Nielsen Norman Group
+        type: feed
+        url: https://www.nngroup.com/feed/rss/
+      - name: Sidebar
+        type: feed
+        url: https://sidebar.io/feed.xml
