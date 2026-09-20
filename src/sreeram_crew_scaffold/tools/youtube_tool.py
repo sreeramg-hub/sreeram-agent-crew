@@ -1,5 +1,7 @@
 import json
 import pathlib
+import re
+import time
 import xml.etree.ElementTree as ET
 from typing import Literal, Type
 
@@ -11,7 +13,11 @@ STATE_DIR = pathlib.Path(__file__).parents[3] / "state"
 
 NS_ATOM = "{http://www.w3.org/2005/Atom}"
 NS_YT = "{http://www.youtube.com/xml/schemas/2015}"
+NS_MEDIA = "{http://search.yahoo.com/mrss/}"
 RSS_URL = "https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}"
+
+FETCH_ATTEMPTS = 3
+DESCRIPTION_MAX_CHARS = 400
 
 
 def _load_seen(metal: str) -> set:
@@ -26,24 +32,34 @@ def _save_seen(metal: str, seen: set) -> None:
     path.write_text(json.dumps(sorted(seen), indent=2))
 
 
-def load_pending(metal: str) -> dict:
-    """Returns {video_id: {title, url, channel, date, attempts}} for videos awaiting transcription."""
-    path = STATE_DIR / f"{metal}_pending.json"
-    if path.exists():
-        return json.loads(path.read_text())
-    return {}
+def _fetch_feed(channel_id: str) -> ET.Element:
+    """Fetch a channel's RSS feed, retrying briefly — YouTube's feed endpoint is occasionally flaky."""
+    last_error = None
+    for attempt in range(FETCH_ATTEMPTS):
+        if attempt:
+            time.sleep(2 * attempt)
+        try:
+            resp = requests.get(
+                RSS_URL.format(channel_id=channel_id),
+                timeout=10,
+                headers={"User-Agent": "Mozilla/5.0"},
+            )
+            resp.raise_for_status()
+            return ET.fromstring(resp.text)
+        except Exception as e:
+            last_error = e
+    raise last_error
 
 
-def save_pending(metal: str, pending: dict) -> None:
-    path = STATE_DIR / f"{metal}_pending.json"
-    path.write_text(json.dumps(pending, indent=2))
-
-
-def remove_from_pending(metal: str, video_id: str) -> None:
-    pending = load_pending(metal)
-    if video_id in pending:
-        del pending[video_id]
-        save_pending(metal, pending)
+def _short_description(entry: ET.Element) -> str:
+    """Channel-written description, flattened, with links removed and length capped."""
+    el = entry.find(f"{NS_MEDIA}group/{NS_MEDIA}description")
+    text = (el.text or "") if el is not None else ""
+    text = re.sub(r"https?://\S+", "", text)
+    text = " ".join(text.split())
+    if len(text) > DESCRIPTION_MAX_CHARS:
+        text = text[:DESCRIPTION_MAX_CHARS].rstrip() + "…"
+    return text
 
 
 class YoutubeNewUploadsInput(BaseModel):
@@ -58,9 +74,10 @@ class YoutubeNewUploadsInput(BaseModel):
 class YoutubeNewUploadsTool(BaseTool):
     name: str = "youtube_new_uploads"
     description: str = (
-        "Checks a list of YouTube channels for videos not yet processed, "
-        "and also returns any videos from previous runs where transcription failed. "
-        "Returns video titles, URLs, published dates, and whether each is new or a retry. "
+        "Checks a list of YouTube channels for videos not yet processed. "
+        "Returns each new video's channel, title, published date, link and the "
+        "channel-written description. Videos are not transcribed, so only the "
+        "title and description are known. "
         "Inputs: comma-separated channel_ids, metal ('gold' or 'silver')."
     )
     args_schema: Type[BaseModel] = YoutubeNewUploadsInput
@@ -68,20 +85,15 @@ class YoutubeNewUploadsTool(BaseTool):
     def _run(self, channel_ids: str, metal: str) -> str:
         metal = metal.lower().strip()
         seen = _load_seen(metal)
-        pending = load_pending(metal)
         lines = []
+        errors = []
         channel_names = []
 
-        # --- New videos from RSS ---
         for channel_id in [c.strip() for c in channel_ids.split(",") if c.strip()]:
-            url = RSS_URL.format(channel_id=channel_id)
             try:
-                resp = requests.get(url, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
-                resp.raise_for_status()
-                root = ET.fromstring(resp.text)
+                root = _fetch_feed(channel_id)
             except Exception as e:
-                channel_names.append(channel_id)
-                lines.append(f"[ERROR fetching channel {channel_id}: {e}]")
+                errors.append(f"[ERROR fetching channel {channel_id}: {e}]")
                 continue
 
             channel_title = getattr(root.find(f"{NS_ATOM}title"), "text", channel_id)
@@ -97,46 +109,29 @@ class YoutubeNewUploadsTool(BaseTool):
 
                 title = getattr(entry.find(f"{NS_ATOM}title"), "text", "Unknown title")
                 published = getattr(entry.find(f"{NS_ATOM}published"), "text", "")[:10]
-                video_url = f"https://www.youtube.com/watch?v={vid_id}"
+                description = _short_description(entry)
 
                 lines.append(
-                    f"- [NEW] [{channel_title}] {published} | {title}\n"
-                    f"  URL: {video_url}\n  ID: {vid_id}"
+                    f"- [{channel_title}] {published} | {title}\n"
+                    f"  URL: https://www.youtube.com/watch?v={vid_id}\n"
+                    f"  Description (written by the channel, unverified): "
+                    f"{description or '(none provided)'}"
                 )
                 seen.add(vid_id)
-                # Add to pending — transcribe_video removes it on success
-                pending[vid_id] = {
-                    "title": title,
-                    "url": video_url,
-                    "channel": channel_title,
-                    "date": published,
-                    "attempts": 0,
-                }
 
         _save_seen(metal, seen)
 
-        # --- Pending retries from previous runs ---
-        retry_lines = []
-        for vid_id, meta in pending.items():
-            retry_lines.append(
-                f"- [RETRY — transcript failed previously] [{meta['channel']}] "
-                f"{meta['date']} | {meta['title']}\n"
-                f"  URL: {meta['url']}\n  ID: {vid_id}"
-            )
-            pending[vid_id]["attempts"] = meta.get("attempts", 0) + 1
-
-        save_pending(metal, pending)
-
-        if not lines and not retry_lines:
-            names = ", ".join(channel_names)
-            return f"No new {metal} videos and no pending retries. Channels checked: {names}."
-
-        result = []
+        parts = []
         if lines:
-            result.append(f"NEW videos ({len(lines)}):\n" + "\n".join(lines))
-        if retry_lines:
-            result.append(
-                f"RETRY videos — transcription failed on a previous run ({len(retry_lines)}):\n"
-                + "\n".join(retry_lines)
+            parts.append(f"NEW {metal} videos ({len(lines)}):\n" + "\n".join(lines))
+        else:
+            parts.append(
+                f"No new {metal} videos. "
+                f"Channels checked: {', '.join(channel_names) or 'none'}."
             )
-        return "\n\n".join(result)
+        if errors:
+            parts.append(
+                "Some channels could not be checked — mention this in the briefing:\n"
+                + "\n".join(errors)
+            )
+        return "\n\n".join(parts)

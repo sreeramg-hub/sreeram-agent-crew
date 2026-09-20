@@ -7,8 +7,6 @@ requires-python = ">=3.10,<3.14"
 dependencies = [
     "crewai[anthropic,tools]==1.14.7",
     "resend>=2.32.2",
-    "youtube-transcript-api>=1.2.4",
-    "yt-dlp>=2026.6.9",
 ]
 
 [project.scripts]
